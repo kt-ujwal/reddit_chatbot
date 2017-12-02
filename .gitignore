@@ -1,0 +1,4 @@
+*.db
+nohup*
+__pycache__
+*.pyc
