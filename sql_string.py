@@ -9,13 +9,14 @@ class SqlString(object):
     Terminate function returns list as string.
     """
 
-    def __init__(self, table, sql=[]):
+    def __init__(self, table, sql=[], values=[]):
         """Generate sql with respect to table.
         @param table name of database.
         @param sql list of partial SQL strings.
         """
         self.table = table
         self.sql = list(sql)
+        self.values = list(values)
 
     def terminate(self):
         """Return tuple (string, values)
@@ -24,12 +25,7 @@ class SqlString(object):
         """
         assert len(self.sql) > 0
         string = "".join(self.sql)
-        return string + ";"
-
-    def quote_values(self, **kwargs):
-        keys, values = kwargs.keys(), kwargs.values()
-        values = map(lambda v : "\'"+v+"\'" if type(v) == str else v, values)
-        return list(zip(keys, values))
+        return string + ";", tuple(self.values)
 
     def create(self, **kwargs):
         """Create new table with kwargs key : TYPE."""
@@ -37,7 +33,7 @@ class SqlString(object):
         sql.append("CREATE TABLE IF NOT EXISTS {} (".format(self.table))
         sql.append(", ".join("{} {}".format(k, v) for k, v in kwargs.items()))
         sql.append(")")
-        return SqlString(self.table, self.sql + sql)
+        return SqlString(self.table, self.sql + sql, self.values)
 
     def read(self, *args, **kwargs):
         """Select args columns of statement matching kwargs."""
@@ -46,39 +42,38 @@ class SqlString(object):
             sql.append("SELECT ")
             sql.append(", ".join(args))
             sql.append(" FROM {} ".format(self.table))
-            sql.append("WHERE " + " AND ".join("{} = {}".format(k, v) for k, v in self.quote_values(**kwargs)))
-        return SqlString(self.table, self.sql + sql)
+            sql.append("WHERE " + " AND ".join("{} = ?".format(k) for k in kwargs.keys()))
+        return SqlString(self.table, self.sql + sql, self.values + list(kwargs.values()))
 
     def insert(self, **kwargs):
         """Insert rows matching kwargs."""
-        keys, values = zip(*self.quote_values(**kwargs))
         sql = []
         sql.append("INSERT INTO {} (".format(self.table))
-        sql.append(", ".join(keys))
+        sql.append(", ".join(kwargs.keys()))
         sql.append(") VALUES (")
-        sql.append(", ".join("{}".format(v) for v in values))
+        sql.append(", ".join("?"*len(kwargs)))
         sql.append(")")
-        return SqlString(self.table, self.sql + sql)
+        return SqlString(self.table, self.sql + sql, self.values + list(kwargs.values()))
 
     def update(self, selections, **kwargs):
         """Update select rows from selection, with information matching kwargs."""
         sql = []
         sql.append("UPDATE {} SET ".format(self.table))
-        sql.append(", ".join("{} = {}".format(k, v) for k, v in self.quote_values(**kwargs)))
-        sql.append(" WHERE " + " AND ".join("{} = {}".format(k, v) for k, v in self.quote_values(**selections)))
-        return SqlString(self.table, self.sql + sql)
+        sql.append(", ".join("{} = ?".format(k) for k in kwargs.keys()))
+        sql.append(" WHERE " + " AND ".join("{} = ?".format(k) for k in selections.keys()))
+        return SqlString(self.table, self.sql + sql, self.values + list(kwargs.values()) + list(selections.values()))
 
     def delete(self, **kwargs):
         """Deletes rows matching kwargs."""
         sql = []
         sql.append("DELETE FROM {} ".format(self.table))
-        sql.append("WHERE " + " AND ".join("{} = {}".format(k, v) for k, v in self.quote_values(**kwargs)))
-        return SqlString(self.table, self.sql + sql)
+        sql.append(" WHERE " + " AND ".join("{} = ?".format(k) for k in kwargs.keys()))
+        return SqlString(self.table, self.sql + sql, self.values + list(kwargs.values()))
 
     def limit(self, limit):
         sql = []
         sql.append(" LIMIT {}".format(limit))
-        return SqlString(self.table, self.sql + sql)
+        return SqlString(self.table, self.sql + sql, self.values)
 
 if __name__ == "__main__":
     table = "parent_reply"
@@ -115,4 +110,5 @@ if __name__ == "__main__":
                 "created_utc":created_utc,
                 "score":score})
             ]
-    print('\n'.join(map(lambda s : s.terminate(), sql_strings)))
+    string_tuples = map(lambda s : s.terminate(), sql_strings)
+    print('\n'.join(map(lambda st : st[0] + str(st[1]), string_tuples)))

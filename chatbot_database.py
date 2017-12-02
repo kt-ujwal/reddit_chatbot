@@ -37,7 +37,7 @@ def create_table():
             "created_utc":"INT",
             "score":"INT"}
     sql = sql_string.create(**kwargs).terminate()
-    c.execute(sql)
+    c.execute(*sql)
 
 def format_data(data):
     data = data.replace("\n", " newlinechar ").replace("\r", " newlinechar ").replace("\"", "'")
@@ -56,12 +56,11 @@ def acceptable(data):
 def transaction_bldr(sql):
     global sql_transaction
     sql_transaction.append(sql)
-    if len(sql_transaction) > 100:
-        print("\n".join(sorted(sql_transaction)))
+    if len(sql_transaction) > 10000:
         c.execute("BEGIN TRANSACTION")
         for sql in sql_transaction:
             try:
-                c.execute(sql)
+                c.execute(*sql)
             except:
                 pass
         connection.commit()
@@ -78,7 +77,7 @@ def try_except(f, **kwargs):
 def find_sql(*args, **kwargs):
     def helper():
         sql = sql_string.read(*args, **kwargs).limit(1).terminate()
-        c.execute(sql)
+        c.execute(*sql)
         result = c.fetchone()
         if result != None:
             return result[0]
@@ -107,7 +106,7 @@ if __name__ == "__main__":
 
     print(find_sql("score", parent_id="t3_73i73d"))
     
-    with open(json_data, buffering=1000) as f:
+    with open(json_data, buffering=10000) as f:
         for row in f:
             row_counter += 1
             row = json.loads(row)
