@@ -1,29 +1,38 @@
+"""
+Reads newline-separated JSON data, inserts into SQL database.
+Comments without parents are inserted as-is (with parent NULL).
+Comments with parents:
+    If comment with same parent doesn't exist, insert as-is (with parent data).
+    If comment with same parent exists, and current comment greater score,
+ 	then update comment (with parent data).
+"""
+# TODO Expected:
+# Final SQL insertions on first pass through JSON data.
+# Final SQL updates on second pass through JSON data.
+# However, SQL updates never finish, only reduce in number. Why?
+
 import sqlite3
 from datetime import datetime
 from sql_string import SqlString
 import json
-"""
-try:
-    import ijson.backends.yajl2_cffi as ijson
-except:
-    import ijson
-"""
 
-master_folder = "/media/bigdata/"
-time_year = "2017"
-time_month = "10"
-json_data = "RC_{}-{}".format(time_year, time_month)
-db = "RC_{}-{}.db".format(time_year, time_month)
+# Parameters
+master_folder = "/media/bigdata/"        # Folder containing data / SQL.
+table = "parent_reply"                   # Name of SQL table.
+time_year = "2017"                       # Year of data.
+time_month = "10"                        # Month of data.
+json_data = "RC_{}-{}".format(time_year,
+			      time_month)# Name of JSON data.
+db = json_data + ".db"                   # Name of SQL database.
+score_threshold = 7                      # Ignore comments below this score.
+print_rows = 1000000                     # Print rates every 1000000 rows.
 
-# Read JSON from master folder.
-# Write db to master folder.
-# Else, read/write to relative filepath.
+# Comment out if in same directory as this Python file.
 json_data = master_folder + json_data
 #db = master_folder + db
 
 connection = sqlite3.connect(db)
 c = connection.cursor()
-table = "parent_reply"
 sql_string = SqlString(table)
 sql_transaction = []
 
@@ -100,21 +109,19 @@ def update_sql(selections, **kwargs):
 if __name__ == "__main__":
     import sys
     create_table()
-    row_counter = 0
+    total_rows = 0
     paired_rows = 0
     updated_rows = 0
-
-    print(find_sql("score", parent_id="t3_73i73d"))
     
     with open(json_data, buffering=10000) as f:
         for row in f:
-            row_counter += 1
+            total_rows += 1
             row = json.loads(row)
             if "score" in row and row["score"]:
                 score = int(row["score"])
                 body = format_data(row["body"])
 
-                if score >= 1 and acceptable(body):
+                if score >= score_threshold and acceptable(body):
                     parent_id = row['parent_id']
                     parent = find_sql("body", comment_id=parent_id)
                     comment_id = parent_id[:3] + row['id']
@@ -128,6 +135,8 @@ if __name__ == "__main__":
                             "subreddit":subreddit,
                             "created_utc":created_utc,
                             "score":score}
+                    if not parent:
+                        del kwargs["parent"]
 
                     previous_score = find_sql("score", parent_id=parent_id)
                     if previous_score:
@@ -137,13 +146,11 @@ if __name__ == "__main__":
                     else:
                         if parent:
                             paired_rows += 1
-                        else:
-                            del kwargs["parent"]
                         insert_sql(**kwargs)
 
-                if row_counter % 300000 == 0:
-                    print('Read:{}, Paired:{}, Updated:{}, Time:{}'.format(row_counter, paired_rows, updated_rows, str(datetime.now())))
+                if total_rows % print_rows == 0:
+                    print('Paired:{}, Updated:{}, Time:{}'.format(paired_rows/total_rows, updated_rows/total_rows, str(datetime.now())))
                     sys.stdout.flush()
-                    row_counter = 0
+                    total_rows = 0
                     paired_rows = 0
                     updated_rows = 0

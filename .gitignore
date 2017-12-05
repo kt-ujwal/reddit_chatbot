@@ -1,4 +1,6 @@
 *.db
+*.to
+*.from
 nohup*
 __pycache__
 *.pyc

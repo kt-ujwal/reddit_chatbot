@@ -1,5 +1,8 @@
 """
-Exports strings that follow DB-API 2.0. https://www.python.org/dev/peps/pep-0249/
+Exports strings that follow DB-API parameter substitution. https://www.python.org/dev/peps/pep-0249/
+All terminated SqlString is a tuple of:
+    Semicolon-terminated string which may or may not contain question marks.
+    Tuple of Python values to be substituted into the question marks.
 Used in executing SQLite3 statements. https://docs.python.org/3/library/sqlite3.html
 """
 
